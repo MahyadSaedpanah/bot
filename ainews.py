@@ -27,8 +27,8 @@ def send_news(context):
 # تابع استارت و زمان‌بندی
 def start(update, context):
     chat_id = update.message.chat_id  # آی‌دی کاربری که پیام داده
-    update.message.reply_text("ارسال اخبار هر 12 ساعت شروع شد!")
-    # زمان‌بندی ارسال پیام (هر 12 ساعت)
+    update.message.reply_text("ارسال اخبار هر پنج دقیقه شروع شد!")
+    # زمان‌بندی ارسال پیام (هر پنج دقیقه)
     context.job_queue.run_repeating(send_news, interval=300, first=5, context=chat_id)
 
 # شروع ربات
