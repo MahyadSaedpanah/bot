@@ -1,45 +1,77 @@
-from telegram.ext import Updater, CommandHandler
+from telegram.ext import Updater, CommandHandler, JobQueue
+from googletrans import Translator
 import requests
 
-# توکن ربات تلگرام
-TOKEN = "7542986703:AAGP4G6UL1zJszI-YY2qiK8n1F_zDJebfuY"
+# تنظیمات اولیه
+TOKEN = "7542986703:AAGP4G6UL1zJszI-YY2qiK8n1F_zDJebfuY"  # توکن ربات خود را اینجا قرار دهید
+CHAT_ID = None  # چت آیدی را به‌صورت پویا ذخیره می‌کنیم
 
-# تابع برای گرفتن اخبار
-def get_ai_news():
-    url = "https://newsapi.org/v2/everything"  # API اخبار
-    params = {
-        "q": "Artificial Intelligence",
-        "apiKey": "9601417c98fa4e73b59f21e8f38b2e7a",  # توکن API اخبار
-    }
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        articles = response.json().get("articles", [])
-        if articles:
-            return articles[0]["title"] + "\n" + articles[0]["url"]
-    return "هیچ خبری پیدا نشد."
+# تابع ترجمه به فارسی
+def translate_to_farsi(text):
+    translator = Translator()
+    translated = translator.translate(text, src='en', dest='fa')
+    return translated.text
 
-# تابع برای ارسال اخبار به چت ربات
-def send_news(context):
-    job = context.job
-    news = get_ai_news()
-    context.bot.send_message(chat_id=job.context, text=news)
+# دریافت و ارسال اخبار مرتبط با هوش مصنوعی
+def send_ai_news(context):
+    try:
+        # دریافت اخبار مرتبط با هوش مصنوعی
+        url = "https://newsapi.org/v2/everything?q=artificial%20intelligence&apiKey=9601417c98fa4e73b59f21e8f38b2e7a"
+        response = requests.get(url)
+        data = response.json()
 
-# تابع استارت و زمان‌بندی
+        # بررسی وجود اخبار
+        if "articles" in data and data["articles"]:
+            article = data["articles"][0]  # اولین خبر
+            title = article["title"]
+            description = article["description"]
+            link = article["url"]
+
+            # ترجمه عنوان و توضیحات به فارسی
+            title_farsi = translate_to_farsi(title)
+            description_farsi = translate_to_farsi(description)
+
+            # ساخت پیام نهایی
+            message = f"📢 *خبر جدید در حوزه هوش مصنوعی:*\n\n" \
+                      f"🔹 {title}\n{description}\n" \
+                      f"🌍 [مشاهده خبر اصلی]({link})\n\n" \
+                      f"📜 *ترجمه به فارسی:*\n" \
+                      f"🔹 {title_farsi}\n{description_farsi}"
+
+            # ارسال پیام به چت
+            context.bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown", disable_web_page_preview=True)
+        else:
+            context.bot.send_message(chat_id=CHAT_ID, text="❌ هیچ خبری در حوزه هوش مصنوعی پیدا نشد.")
+
+    except Exception as e:
+        print(f"❌ خطا در دریافت یا ارسال خبر: {e}")
+        if CHAT_ID:
+            context.bot.send_message(chat_id=CHAT_ID, text="❌ خطایی در دریافت اخبار رخ داد.")
+
+# تابع برای ذخیره چت آیدی
 def start(update, context):
-    chat_id = update.message.chat_id  # آی‌دی کاربری که پیام داده
-    update.message.reply_text("ارسال اخبار هر پنج دقیقه شروع شد!")
-    # زمان‌بندی ارسال پیام (هر پنج دقیقه)
-    context.job_queue.run_repeating(send_news, interval=300, first=5, context=chat_id)
+    global CHAT_ID
+    CHAT_ID = update.message.chat_id
+    update.message.reply_text("✅ ربات فعال شد! اخبار هوش مصنوعی به این چت ارسال خواهد شد.")
 
-# شروع ربات
+# راه‌اندازی بات
 def main():
     updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
-    dp.add_handler(CommandHandler("start", start))
+    dispatcher = updater.dispatcher
+    job_queue = updater.job_queue
 
-    # استارت JobQueue
-    updater.start_polling()
-    updater.idle()
+    # ثبت دستور /start برای شروع
+    dispatcher.add_handler(CommandHandler("start", start))
+
+    # تنظیم زمان‌بندی ارسال اخبار (هر 5 دقیقه)
+    job_queue.run_repeating(send_ai_news, interval=300, first=5)
+
+    # شروع Polling
+    try:
+        updater.start_polling()
+        updater.idle()
+    except Exception as e:
+        print(f"❌ خطای کلی: {e}")
 
 if __name__ == "__main__":
     main()
